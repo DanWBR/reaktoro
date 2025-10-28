@@ -67,6 +67,8 @@ if(DEFINED ENV{CONDA_PREFIX})
 
     # Check if CONDA_AWARE_PREFIX has been successfully set
     if(DEFINED CONDA_AWARE_PREFIX)
+        # Convert to CMake path format (forward slashes) to avoid escape sequence issues
+        file(TO_CMAKE_PATH "${CONDA_AWARE_PREFIX}" CONDA_AWARE_PREFIX)
         message(STATUS "CondaAware: Setting CONDA_AWARE_PREFIX=${CONDA_AWARE_PREFIX}")
     else()
         message(FATAL_ERROR "CondaAware: Could not determine a value for CONDA_AWARE_PREFIX. Expecting Unix or Windows systems.")
@@ -74,8 +76,8 @@ if(DEFINED ENV{CONDA_PREFIX})
 
     # Set CMAKE_INSTALL_PREFIX to CONDA_AWARE_PREFIX if not specified by the user
     if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-        message(STATUS "CondaAware: Setting CMAKE_INSTALL_PREFIX=CONDA_AWARE_PREFIX=${CONDA_AWARE_PREFIX}")
-        set(CMAKE_INSTALL_PREFIX ${CONDA_AWARE_PREFIX})
+        message(STATUS "CondaAware: Setting CMAKE_INSTALL_PREFIX=${CONDA_AWARE_PREFIX}")
+        set(CMAKE_INSTALL_PREFIX "${CONDA_AWARE_PREFIX}" CACHE PATH "Install prefix" FORCE)
     endif()
 
     # Ensure dependencies from the conda environment are used instead of those from the system.
