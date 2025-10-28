@@ -26,9 +26,15 @@ add_custom_target(reaktoro-setuptools ALL
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # Ensure the path where the python package is installed is not empty
+# Keep forward slashes to avoid backslash escape issues in generated CMake scripts
 if(NOT DEFINED REAKTORO_PYTHON_INSTALL_PREFIX)
-    file(TO_NATIVE_PATH ${CMAKE_INSTALL_PREFIX} REAKTORO_PYTHON_INSTALL_PREFIX)
+        set(REAKTORO_PYTHON_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 endif()
 
 # Create an install target for the reaktoro python package
-install(CODE "execute_process(COMMAND pip install . --no-deps --force-reinstall --ignore-installed --no-compile --prefix=${REAKTORO_PYTHON_INSTALL_PREFIX} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})")
+install(CODE [==[
+    execute_process(
+        COMMAND "${Python_EXECUTABLE}" -m pip install . --no-deps --force-reinstall --ignore-installed --no-compile --prefix "${REAKTORO_PYTHON_INSTALL_PREFIX}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+]==])
