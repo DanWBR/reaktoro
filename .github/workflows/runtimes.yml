@@ -31,11 +31,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { rid: win-x64,     os: windows-2022     }
-          - { rid: linux-x64,   os: ubuntu-22.04     }
-          - { rid: linux-arm64, os: ubuntu-22.04-arm }
-          - { rid: osx-x64,     os: macos-13         }
-          - { rid: osx-arm64,   os: macos-14         }
+          - { rid: win-x64,     os: windows-2022,     compiler: ""                  }
+          - { rid: linux-x64,   os: ubuntu-22.04,     compiler: gxx_linux-64        }
+          - { rid: linux-arm64, os: ubuntu-22.04-arm, compiler: gxx_linux-aarch64   }
+          - { rid: osx-x64,     os: macos-13,         compiler: clangxx_osx-64      }
+          - { rid: osx-arm64,   os: macos-14,         compiler: clangxx_osx-arm64   }
 
     steps:
       - uses: actions/checkout@v4
@@ -47,16 +47,25 @@ jobs:
           auto-activate-base: true
           activate-environment: ''
 
-      # The dependencies alone, from the same file the full environment is built from. No Python
-      # package, no tests, no docs: none of that is in what we ship, and each one costs minutes.
+      # Only what the C++ library links against. The full development environment carries pytest,
+      # matplotlib, Jupyter and the documentation toolchain, none of which ends up in what we ship.
+      #
+      # Python and pybind11 are here despite the Python package being off: ReaktoroFindDeps.cmake
+      # marks both REQUIRED regardless, so configuring fails without them.
       - name: Installing dependencies
         shell: bash -el {0}
-        env:
-          PYTHON_VERSION: "3.12"
         run: |
-          conda install -y mamba
-          mamba install -y conda-devenv
-          conda devenv -e mamba
+          conda create -y -n reaktoro -c conda-forge \
+            python=3.12 cmake ninja \
+            autodiff eigen nlohmann_json optima=0.6.0 phreeqc4rkt cpp-tabulate \
+            thermofun=0.4.5 tsl_ordered_map yaml-cpp=0.8.0 spdlog=1.12 pybind11 \
+            ${{ matrix.compiler }}
+
+      # Windows takes its compiler from the runner rather than from conda: the runner has Visual
+      # Studio and conda-forge's compiler packages for Windows are activation scripts that look for
+      # a version it does not have.
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
 
       - name: Building the C API
         shell: bash -el {0}
@@ -84,7 +93,7 @@ jobs:
           # pefile reads a PE import table without needing the Visual Studio tools; patchelf is what
           # rewrites an ELF's RPATH. Neither is a build dependency, only a packaging one.
           if [ "${{ runner.os }}" = "Windows" ]; then pip install pefile; fi
-          if [ "${{ runner.os }}" = "Linux" ]; then mamba install -y patchelf; fi
+          if [ "${{ runner.os }}" = "Linux" ]; then conda install -y -c conda-forge patchelf; fi
           python scripts/collect_runtime.py --rid ${{ matrix.rid }} --prefix .install --out runtimes
 
       - name: Checking the library loads

@@ -275,3 +275,62 @@ int reaktoro_equilibrate(ReaktoroSystem* system,
         return 3;
     }
 }
+
+int reaktoro_properties(ReaktoroSystem* system,
+                        double temperature,
+                        double pressure,
+                        const double* species_amounts,
+                        int species_amounts_size,
+                        double* ln_activity_coefficients)
+{
+    lastError.clear();
+
+    if(system == nullptr)
+    {
+        lastError = "No chemical system.";
+        return 1;
+    }
+
+    const int count = reaktoro_species_count(system);
+
+    if(species_amounts_size != count)
+    {
+        lastError = "Expected one amount per species.";
+        return 2;
+    }
+
+    try
+    {
+        ChemicalState state(system->system);
+        state.temperature(temperature);
+        state.pressure(pressure);
+
+        ArrayXd amounts(count);
+        for(int i = 0; i < count; ++i)
+            amounts[i] = species_amounts[i];
+
+        state.setSpeciesAmounts(amounts);
+
+        const auto props = ChemicalProps(state);
+
+        if(ln_activity_coefficients != nullptr)
+        {
+            const auto values = props.speciesActivityCoefficientsLn();
+
+            for(int i = 0; i < count; ++i)
+                ln_activity_coefficients[i] = values[i];
+        }
+
+        return 0;
+    }
+    catch(const std::exception& e)
+    {
+        lastError = e.what();
+        return 3;
+    }
+    catch(...)
+    {
+        lastError = "Reaktoro failed to evaluate the chemical properties.";
+        return 3;
+    }
+}

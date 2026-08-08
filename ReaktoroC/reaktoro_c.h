@@ -87,6 +87,21 @@ REAKTORO_C_API int reaktoro_equilibrate(ReaktoroSystem* system,
                                         double* aqueous_amount,
                                         double* gaseous_amount);
 
+/// The activity coefficients of a composition that is given, not solved for.
+///
+/// Where reaktoro_equilibrate finds the state, this one is told it: species_amounts holds
+/// reaktoro_species_count values in species order, and the properties come back evaluated at that
+/// composition, T kelvin and P pascal. This is what an activity coefficient model looks like from
+/// the outside, and DWSIM calls it that way from its own iteration.
+///
+/// Returns 0 on success.
+REAKTORO_C_API int reaktoro_properties(ReaktoroSystem* system,
+                                       double temperature,
+                                       double pressure,
+                                       const double* species_amounts,
+                                       int species_amounts_size,
+                                       double* ln_activity_coefficients);
+
 #ifdef __cplusplus
 }
 #endif
