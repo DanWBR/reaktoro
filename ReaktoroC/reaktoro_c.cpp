@@ -162,7 +162,11 @@ ReaktoroSystem* reaktoro_create(const char* database,
 
         Phases phases(db);
 
-        AqueousPhase aqueous(StringList(aqueousNames));
+        // The lists are named rather than built in place: AqueousPhase aqueous(StringList(names))
+        // declares a function, and the compiler is right to say so.
+        const StringList aqueousList(aqueousNames);
+
+        AqueousPhase aqueous(aqueousList);
         aqueous.set(chain(ActivityModelHKF(), ActivityModelDrummond("CO2")));
         phases.add(aqueous);
 
@@ -170,7 +174,9 @@ ReaktoroSystem* reaktoro_create(const char* database,
 
         if(!gaseousNames.empty())
         {
-            GaseousPhase gaseous(StringList(gaseousNames));
+            const StringList gaseousList(gaseousNames);
+
+            GaseousPhase gaseous(gaseousList);
             gaseous.set(gaseousActivityModel(gaseous_model));
             phases.add(gaseous);
 
