@@ -1,9 +1,9 @@
-# Builds the flat C API and every shared library it needs at run time, one folder per .NET runtime
-# identifier, and publishes them as the `runtimes` artifact.
+# Builds the flat C API and every shared library it needs at run time, one archive per .NET runtime
+# identifier, and publishes them on a release.
 #
-# This is what DWSIM consumes: it vendors the folders under
-# engine/DWSIM.Thermodynamics.ReaktoroPropertyPackage/native/<rid>/ and copies the one that matches
-# what is being built next to the managed assembly.
+# This is what DWSIM consumes: its build downloads the one archive that matches what it is building
+# and unpacks it next to the managed assembly. They are around fifty megabytes each, which is why
+# they live on a release rather than in either repository.
 #
 # On demand and on tags only. The three workflows alongside this one already build and test Reaktoro
 # on every push; this one exists to produce binaries, and producing them costs a lot of minutes.
@@ -74,7 +74,12 @@ jobs:
         run: |
           source activate reaktoro
           git clone --depth 1 --branch v1.1.2 https://github.com/autodiff/autodiff.git .autodiff
-          cmake -S .autodiff -B .autodiff/build -GNinja             -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX             -DAUTODIFF_BUILD_TESTS=OFF             -DAUTODIFF_BUILD_PYTHON=OFF             -DAUTODIFF_BUILD_EXAMPLES=OFF             -DAUTODIFF_BUILD_DOCS=OFF
+          cmake -S .autodiff -B .autodiff/build -GNinja \
+            -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX \
+            -DAUTODIFF_BUILD_TESTS=OFF \
+            -DAUTODIFF_BUILD_PYTHON=OFF \
+            -DAUTODIFF_BUILD_EXAMPLES=OFF \
+            -DAUTODIFF_BUILD_DOCS=OFF
           cmake --install .autodiff/build
 
       # Windows takes its compiler from the runner rather than from conda: the runner has Visual
