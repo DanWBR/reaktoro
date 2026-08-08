@@ -29,6 +29,7 @@ include(GNUInstallDirs)
 option(REAKTORO_BUILD_EXAMPLES "Build the C++ examples." ON)
 option(REAKTORO_BUILD_DOCS     "Build the documentation." ON)
 option(REAKTORO_BUILD_PYTHON   "Build the Python package." ON)
+option(REAKTORO_BUILD_C_API    "Build the flat C API." OFF)
 option(REAKTORO_BUILD_TESTS    "Build the C++ tests." ON)
 
 # Define is Reaktoro should be built linking against openlibm instead of system's default libm
@@ -90,6 +91,11 @@ add_subdirectory(embedded)
 
 # Build the C++ library Reaktoro
 add_subdirectory(Reaktoro)
+
+# Build the flat C API
+if(REAKTORO_BUILD_C_API)
+    add_subdirectory(ReaktoroC)
+endif()
 
 # Build the Python package reaktoro
 if(REAKTORO_BUILD_PYTHON)

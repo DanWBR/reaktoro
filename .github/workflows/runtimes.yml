@@ -1,0 +1,122 @@
+# Builds the flat C API and every shared library it needs at run time, one folder per .NET runtime
+# identifier, and publishes them as the `runtimes` artifact.
+#
+# This is what DWSIM consumes: it vendors the folders under
+# engine/DWSIM.Thermodynamics.ReaktoroPropertyPackage/native/<rid>/ and copies the one that matches
+# what is being built next to the managed assembly.
+#
+# On demand and on tags only. The three workflows alongside this one already build and test Reaktoro
+# on every push; this one exists to produce binaries, and producing them costs a lot of minutes.
+#
+# win-arm64 is missing on purpose. Reaktoro's dependencies come from conda-forge, and neither Optima
+# nor phreeqc4rkt is built for that platform - conda-forge does not build for win-arm64 at all.
+# Getting it would mean building the whole dependency chain from source for ARM64 Windows.
+
+name: runtimes
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64,     os: windows-2022     }
+          - { rid: linux-x64,   os: ubuntu-22.04     }
+          - { rid: linux-arm64, os: ubuntu-22.04-arm }
+          - { rid: osx-x64,     os: macos-13         }
+          - { rid: osx-arm64,   os: macos-14         }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          miniforge-version: latest
+          auto-activate-base: true
+          activate-environment: ''
+
+      # The dependencies alone, from the same file the full environment is built from. No Python
+      # package, no tests, no docs: none of that is in what we ship, and each one costs minutes.
+      - name: Installing dependencies
+        shell: bash -el {0}
+        env:
+          PYTHON_VERSION: "3.12"
+        run: |
+          conda install -y mamba
+          mamba install -y conda-devenv
+          conda devenv -e mamba
+
+      - name: Building the C API
+        shell: bash -el {0}
+        run: |
+          source activate reaktoro
+          cmake -S . -B .build -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=.install \
+            -DREAKTORO_BUILD_C_API=ON \
+            -DREAKTORO_BUILD_PYTHON=OFF \
+            -DREAKTORO_BUILD_TESTS=OFF \
+            -DREAKTORO_BUILD_DOCS=OFF \
+            -DREAKTORO_BUILD_EXAMPLES=OFF
+          cmake --build .build --parallel
+          cmake --install .build
+
+      # The C API pulls in Reaktoro, which pulls in Optima, phreeqc4rkt, ThermoFun and the rest, all
+      # of them shared libraries living in the conda environment. Walking the dependencies is the
+      # only way to get the closure right: a hand-written list goes stale the first time a
+      # dependency of a dependency changes.
+      - name: Collecting the runtime
+        shell: bash -el {0}
+        run: |
+          source activate reaktoro
+          # pefile reads a PE import table without needing the Visual Studio tools; patchelf is what
+          # rewrites an ELF's RPATH. Neither is a build dependency, only a packaging one.
+          if [ "${{ runner.os }}" = "Windows" ]; then pip install pefile; fi
+          if [ "${{ runner.os }}" = "Linux" ]; then mamba install -y patchelf; fi
+          python scripts/collect_runtime.py --rid ${{ matrix.rid }} --prefix .install --out runtimes
+
+      - name: Checking the library loads
+        shell: bash -el {0}
+        run: |
+          source activate reaktoro
+          python scripts/check_runtime.py --rid ${{ matrix.rid }} --dir runtimes/${{ matrix.rid }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtimes-${{ matrix.rid }}
+          path: runtimes/${{ matrix.rid }}
+          if-no-files-found: error
+
+  bundle:
+    name: runtimes
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: runtimes-*
+          path: runtimes
+
+      - name: Flattening the per-runtime artifacts
+        run: |
+          cd runtimes
+          for d in runtimes-*; do mv "$d" "${d#runtimes-}"; done
+          ls -la */
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtimes
+          path: runtimes
+          if-no-files-found: error
