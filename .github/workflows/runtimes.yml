@@ -57,7 +57,7 @@ jobs:
         run: |
           conda create -y -n reaktoro -c conda-forge \
             python=3.12 cmake ninja \
-            autodiff eigen nlohmann_json optima=0.6.0 phreeqc4rkt cpp-tabulate \
+            autodiff eigen=3.4.* nlohmann_json optima=0.6.0 phreeqc4rkt cpp-tabulate \
             thermofun=0.4.5 tsl_ordered_map yaml-cpp=0.8.0 spdlog=1.12 pybind11 \
             ${{ matrix.compiler }}
 
