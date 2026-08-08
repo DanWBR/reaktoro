@@ -16,6 +16,11 @@ name: runtimes
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish the runtimes under. DWSIM pins this exact tag."
+        required: true
+        default: "runtimes-2.13.0"
   push:
     tags: ["v*"]
 
@@ -119,24 +124,39 @@ jobs:
           path: runtimes/${{ matrix.rid }}
           if-no-files-found: error
 
-  bundle:
-    name: runtimes
+  # One zip per runtime, on a release, because that is where DWSIM reads them from: its build
+  # downloads the one runtime it needs rather than carrying a quarter of a gigabyte of binaries in
+  # its own history. The tag is pinned on the DWSIM side, so republishing under a new tag is a
+  # deliberate act rather than something a build picks up by surprise.
+  publish:
+    name: publish
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           pattern: runtimes-*
           path: runtimes
 
-      - name: Flattening the per-runtime artifacts
+      - name: Zipping one archive per runtime
         run: |
           cd runtimes
-          for d in runtimes-*; do mv "$d" "${d#runtimes-}"; done
-          ls -la */
+          for d in runtimes-*; do
+            rid="${d#runtimes-}"
+            mv "$d" "$rid"
+            (cd "$rid" && zip -qr "../reaktoro-$rid.zip" .)
+            echo "$rid: $(du -h "reaktoro-$rid.zip" | cut -f1)"
+          done
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: runtimes
-          path: runtimes
-          if-no-files-found: error
+      - name: Publishing the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
+                 --title "Reaktoro C API runtimes" \
+                 --notes "The flat C API and its dependency closure, one archive per .NET runtime identifier. Built by .github/workflows/runtimes.yml."
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber runtimes/reaktoro-*.zip
