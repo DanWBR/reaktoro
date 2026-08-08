@@ -47,13 +47,27 @@ def is_system_library(path: Path) -> bool:
     return False
 
 
-def dependencies_linux(path: Path) -> list[Path]:
+def dependencies_linux(path: Path, search: list[Path]) -> list[Path]:
     result = subprocess.run(["ldd", str(path)], capture_output=True, text=True)
     found = []
+
     for line in result.stdout.splitlines():
         match = re.search(r"=>\s+(/\S+)", line)
         if match:
             found.append(Path(match.group(1)))
+            continue
+
+        # An installed library carries no RPATH back to the build tree, so ldd reports its
+        # siblings as "not found" and has no path to give. Look them up where the build put them.
+        match = re.match(r"\s*(\S+)\s+=>\s+not found", line)
+        if match:
+            leaf = match.group(1)
+            for directory in search:
+                candidate = directory / leaf
+                if candidate.exists():
+                    found.append(candidate)
+                    break
+
     return found
 
 
@@ -99,7 +113,7 @@ def dependencies_windows(path: Path, search: list[Path]) -> list[Path]:
 def dependencies(path: Path, search: list[Path]) -> list[Path]:
     key = platform_key()
     if key == "linux":
-        return dependencies_linux(path)
+        return dependencies_linux(path, search)
     if key == "darwin":
         return dependencies_macos(path, search)
     return dependencies_windows(path, search)

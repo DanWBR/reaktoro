@@ -71,9 +71,9 @@ def main() -> int:
     print("Reaktoro " + text_from(library.reaktoro_version))
 
     system = library.reaktoro_create(b"supcrt07-organics",
-                                     b"H2O(aq) H+ OH- CO2(aq) HCO3- CO3-- Na+ Cl-",
+                                     b"H2O(aq) H+ OH- CO2(aq) HCO3- CO3-2 Na+ Cl-",
                                      b"CO2(g) H2O(g)",
-                                     b"PengRobinson")
+                                     b"IdealGas")
 
     if not system:
         print("reaktoro_create failed: " + text_from(library.reaktoro_last_error), file=sys.stderr)

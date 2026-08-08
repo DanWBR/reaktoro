@@ -65,16 +65,17 @@ auto splitNames(const char* text) -> std::vector<std::string>
     return names;
 }
 
-/// The activity model of the gaseous phase, by name. Peng-Robinson is the default because it is
-/// what Reaktoro 1's chemical editor gave a gaseous phase that was not told otherwise.
+/// The activity model of the gaseous phase, by name. The ideal gas is the default because it is
+/// what Reaktoro 1's chemical editor gave a gaseous phase that was not told otherwise, and DWSIM
+/// never told it otherwise.
 auto gaseousActivityModel(const char* name) -> ActivityModelGenerator
 {
     const std::string requested = name == nullptr ? "" : name;
 
-    if(requested == "IdealGas") return ActivityModelIdealGas();
+    if(requested == "PengRobinson") return ActivityModelPengRobinson();
     if(requested == "SoaveRedlichKwong") return ActivityModelSoaveRedlichKwong();
 
-    return ActivityModelPengRobinson();
+    return ActivityModelIdealGas();
 }
 
 /// Opens a database by kind and name, or reads one off disk.

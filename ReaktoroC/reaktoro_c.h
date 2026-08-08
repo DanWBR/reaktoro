@@ -46,7 +46,8 @@ REAKTORO_C_API int reaktoro_last_error(char* buffer, int size);
 ///
 /// The aqueous phase carries the HKF activity model with Drummond's correction for dissolved CO2,
 /// which is what DWSIM asked Reaktoro 1 for. gaseous_model selects the model of the gaseous phase:
-/// "PengRobinson", "SoaveRedlichKwong" or "IdealGas". A null or empty string means Peng-Robinson.
+/// "IdealGas", "PengRobinson" or "SoaveRedlichKwong". A null or empty string means the ideal gas,
+/// which is what Reaktoro 1 gave a gaseous phase that was not told otherwise.
 ///
 /// Returns null on failure, with the reason in reaktoro_last_error.
 REAKTORO_C_API ReaktoroSystem* reaktoro_create(const char* database,
