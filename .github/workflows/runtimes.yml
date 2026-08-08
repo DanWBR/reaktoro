@@ -39,7 +39,7 @@ jobs:
           - { rid: win-x64,     os: windows-2022,     compiler: "",                   autodiff: autodiff }
           - { rid: linux-x64,   os: ubuntu-22.04,     compiler: gxx_linux-64,         autodiff: autodiff }
           - { rid: linux-arm64, os: ubuntu-22.04-arm, compiler: gxx_linux-aarch64,    autodiff: ""       }
-          - { rid: osx-x64,     os: macos-13,         compiler: clangxx_osx-64,       autodiff: autodiff }
+          - { rid: osx-x64,     os: macos-15-intel,   compiler: clangxx_osx-64,       autodiff: autodiff }
           - { rid: osx-arm64,   os: macos-14,         compiler: clangxx_osx-arm64,    autodiff: autodiff }
 
     steps:
@@ -131,6 +131,9 @@ jobs:
   publish:
     name: publish
     needs: build
+    # Whatever built, gets published. One runtime failing or waiting forever on a scarce runner is
+    # not a reason to withhold the four that are ready.
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write
