@@ -31,11 +31,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { rid: win-x64,     os: windows-2022,     compiler: ""                  }
-          - { rid: linux-x64,   os: ubuntu-22.04,     compiler: gxx_linux-64        }
-          - { rid: linux-arm64, os: ubuntu-22.04-arm, compiler: gxx_linux-aarch64   }
-          - { rid: osx-x64,     os: macos-13,         compiler: clangxx_osx-64      }
-          - { rid: osx-arm64,   os: macos-14,         compiler: clangxx_osx-arm64   }
+          - { rid: win-x64,     os: windows-2022,     compiler: "",                   autodiff: autodiff }
+          - { rid: linux-x64,   os: ubuntu-22.04,     compiler: gxx_linux-64,         autodiff: autodiff }
+          - { rid: linux-arm64, os: ubuntu-22.04-arm, compiler: gxx_linux-aarch64,    autodiff: ""       }
+          - { rid: osx-x64,     os: macos-13,         compiler: clangxx_osx-64,       autodiff: autodiff }
+          - { rid: osx-arm64,   os: macos-14,         compiler: clangxx_osx-arm64,    autodiff: autodiff }
 
     steps:
       - uses: actions/checkout@v4
@@ -57,9 +57,20 @@ jobs:
         run: |
           conda create -y -n reaktoro -c conda-forge \
             python=3.12 cmake ninja \
-            autodiff eigen=3.4.* nlohmann_json optima=0.6.0 phreeqc4rkt cpp-tabulate \
+            ${{ matrix.autodiff }} eigen=3.4.* nlohmann_json optima=0.6.0 phreeqc4rkt cpp-tabulate \
             thermofun=0.4.5 tsl_ordered_map yaml-cpp=0.8.0 spdlog=1.12 pybind11 \
             ${{ matrix.compiler }}
+
+      # conda-forge has no autodiff for linux-aarch64. It is header-only, so building it is quick
+      # and it is the same version the package would have brought.
+      - name: Building autodiff from source
+        if: matrix.autodiff == ''
+        shell: bash -el {0}
+        run: |
+          source activate reaktoro
+          git clone --depth 1 --branch v1.1.2 https://github.com/autodiff/autodiff.git .autodiff
+          cmake -S .autodiff -B .autodiff/build -GNinja             -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX             -DAUTODIFF_BUILD_TESTS=OFF             -DAUTODIFF_BUILD_PYTHON=OFF             -DAUTODIFF_BUILD_EXAMPLES=OFF             -DAUTODIFF_BUILD_DOCS=OFF
+          cmake --install .autodiff/build
 
       # Windows takes its compiler from the runner rather than from conda: the runner has Visual
       # Studio and conda-forge's compiler packages for Windows are activation scripts that look for

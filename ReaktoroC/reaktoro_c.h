@@ -54,6 +54,36 @@ REAKTORO_C_API ReaktoroSystem* reaktoro_create(const char* database,
                                                const char* gaseous_species,
                                                const char* gaseous_model);
 
+/// Builds a chemical system from a list of chemical elements rather than a list of species: every
+/// species the database carries that can be made from those elements goes into the phases asked
+/// for. This is how the Gibbs reactor poses its problem.
+///
+/// elements is a run of element symbols separated by spaces or semicolons, "H O C Na Cl". The four
+/// flags select which phases to build; at least one has to be set. The aqueous phase carries the
+/// same activity models as reaktoro_create gives it.
+///
+/// database_kind is "supcrt", "phreeqc", "nasa", "thermofun" or "file". For "file", database is a
+/// path to a database in Reaktoro 2's own YAML or JSON format; the XML databases of Reaktoro 1 are
+/// not readable. For the rest it is the name of one of the databases the library carries.
+///
+/// Returns null on failure, with the reason in reaktoro_last_error.
+REAKTORO_C_API ReaktoroSystem* reaktoro_create_speciated(const char* database_kind,
+                                                         const char* database,
+                                                         const char* elements,
+                                                         int aqueous,
+                                                         int gaseous,
+                                                         int liquid,
+                                                         int mineral,
+                                                         const char* gaseous_model);
+
+/// Every species a database carries, one per line, as "name|formula|state", where state is
+/// "aqueous", "gas", "liquid", "solid" or the name of whatever else Reaktoro reports. Returns the
+/// number of characters needed, or a negative number if the database could not be opened.
+REAKTORO_C_API int reaktoro_database_species(const char* database_kind,
+                                             const char* database,
+                                             char* buffer,
+                                             int size);
+
 /// Releases a system. Null is accepted and ignored.
 REAKTORO_C_API void reaktoro_destroy(ReaktoroSystem* system);
 

@@ -10,6 +10,7 @@
 #include "reaktoro_c.h"
 
 #include <exception>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -76,6 +77,41 @@ auto gaseousActivityModel(const char* name) -> ActivityModelGenerator
     return ActivityModelPengRobinson();
 }
 
+/// Opens a database by kind and name, or reads one off disk.
+auto openDatabase(const char* kind, const char* name) -> Database
+{
+    const std::string which = kind == nullptr || *kind == '\0' ? "supcrt" : kind;
+    const std::string what = name == nullptr ? "" : name;
+
+    if(which == "file") return Database::fromFile(what);
+    if(which == "phreeqc") return PhreeqcDatabase(what);
+    if(which == "nasa") return NasaDatabase(what);
+    if(which == "thermofun") return ThermoFunDatabase(what);
+
+    return SupcrtDatabase(what);
+}
+
+/// What DWSIM calls the aggregate state of a species. Reaktoro names seventeen of them; the four
+/// that matter here are the four the Gibbs reactor offers as phases, and the rest go through
+/// under Reaktoro's own name rather than being forced into one of those.
+auto aggregateStateName(AggregateState state) -> std::string
+{
+    switch(state)
+    {
+        case AggregateState::Aqueous: return "aqueous";
+        case AggregateState::Gas: return "gas";
+        case AggregateState::Liquid: return "liquid";
+        case AggregateState::Solid: return "solid";
+        case AggregateState::CrystallineSolid: return "solid";
+        case AggregateState::AmorphousSolid: return "solid";
+        default: break;
+    }
+
+    std::stringstream text;
+    text << state;
+    return text.str();
+}
+
 } // namespace
 
 /// What a handle carries: the system itself, and the two things every call would otherwise recompute
@@ -121,25 +157,27 @@ ReaktoroSystem* reaktoro_create(const char* database,
             return nullptr;
         }
 
-        SupcrtDatabase db(database == nullptr || *database == '\0' ? "supcrt07-organics" : database);
+        const auto db = openDatabase("supcrt",
+            database == nullptr || *database == '\0' ? "supcrt07-organics" : database);
+
+        Phases phases(db);
 
         AqueousPhase aqueous(StringList(aqueousNames));
         aqueous.set(chain(ActivityModelHKF(), ActivityModelDrummond("CO2")));
+        phases.add(aqueous);
 
         auto handle = new ReaktoroSystem();
 
-        if(gaseousNames.empty())
-        {
-            handle->system = ChemicalSystem(db, aqueous);
-        }
-        else
+        if(!gaseousNames.empty())
         {
             GaseousPhase gaseous(StringList(gaseousNames));
             gaseous.set(gaseousActivityModel(gaseous_model));
+            phases.add(gaseous);
 
-            handle->system = ChemicalSystem(db, aqueous, gaseous);
             handle->hasGaseousPhase = true;
         }
+
+        handle->system = ChemicalSystem(phases);
 
         // The phases come out in the order they went in, but read the index back rather than assume
         // it: a caller that later adds a mineral phase should not silently shift these.
@@ -165,6 +203,125 @@ ReaktoroSystem* reaktoro_create(const char* database,
     {
         lastError = "Reaktoro failed to build the chemical system.";
         return nullptr;
+    }
+}
+
+ReaktoroSystem* reaktoro_create_speciated(const char* database_kind,
+                                          const char* database,
+                                          const char* elements,
+                                          int aqueous,
+                                          int gaseous,
+                                          int liquid,
+                                          int mineral,
+                                          const char* gaseous_model)
+{
+    lastError.clear();
+
+    try
+    {
+        const auto elementNames = splitNames(elements);
+
+        if(elementNames.empty())
+        {
+            lastError = "No elements to build the phases from.";
+            return nullptr;
+        }
+
+        if(aqueous == 0 && gaseous == 0 && liquid == 0 && mineral == 0)
+        {
+            lastError = "No phases were asked for.";
+            return nullptr;
+        }
+
+        const auto db = openDatabase(database_kind, database);
+
+        const auto elementList = StringList(elementNames);
+
+        // Phases has to be given the phases in one go, and each one is a different type, so they
+        // are built into it rather than collected first.
+        Phases phases(db);
+
+        if(aqueous != 0)
+        {
+            AqueousPhase phase(speciate(elementList));
+            phase.set(chain(ActivityModelHKF(), ActivityModelDrummond("CO2")));
+            phases.add(phase);
+        }
+
+        if(gaseous != 0)
+        {
+            GaseousPhase phase(speciate(elementList));
+            phase.set(gaseousActivityModel(gaseous_model));
+            phases.add(phase);
+        }
+
+        if(liquid != 0)
+            phases.add(LiquidPhase(speciate(elementList)));
+
+        if(mineral != 0)
+            phases.add(MineralPhases(speciate(elementList)));
+
+        auto handle = new ReaktoroSystem();
+
+        handle->system = ChemicalSystem(phases);
+
+        for(Index i = 0; i < handle->system.phases().size(); ++i)
+        {
+            const auto& name = handle->system.phase(i).name();
+
+            if(name == "AqueousPhase") handle->aqueousPhaseIndex = i;
+            if(name == "GaseousPhase") { handle->gaseousPhaseIndex = i; handle->hasGaseousPhase = true; }
+        }
+
+        for(const auto& species : handle->system.species())
+            handle->speciesNames.push_back(species.name());
+
+        return handle;
+    }
+    catch(const std::exception& e)
+    {
+        lastError = e.what();
+        return nullptr;
+    }
+    catch(...)
+    {
+        lastError = "Reaktoro failed to build the chemical system.";
+        return nullptr;
+    }
+}
+
+int reaktoro_database_species(const char* database_kind, const char* database,
+                              char* buffer, int size)
+{
+    lastError.clear();
+
+    try
+    {
+        const auto db = openDatabase(database_kind, database);
+
+        std::string lines;
+
+        for(const auto& species : db.species())
+        {
+            lines += species.name();
+            lines += '|';
+            lines += species.formula().str();
+            lines += '|';
+            lines += aggregateStateName(species.aggregateState());
+            lines += '\n';
+        }
+
+        return writeString(lines, buffer, size);
+    }
+    catch(const std::exception& e)
+    {
+        lastError = e.what();
+        return -1;
+    }
+    catch(...)
+    {
+        lastError = "Reaktoro failed to open the database.";
+        return -1;
     }
 }
 
