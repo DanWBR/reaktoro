@@ -143,11 +143,18 @@ def closure(entry: Path, search: list[Path]) -> list[Path]:
 def relocate_linux(directory: Path) -> None:
     """Points every library at the folder it is in, rather than at the conda prefix it was built in."""
     for path in sorted(directory.glob("*.so*")):
+        # Reaktoro is heavily templated and a Release build still carries every symbol name; on
+        # Linux that is most of the seventy megabytes. Nothing here is debugged from a user's
+        # machine, so the symbols go.
+        subprocess.run(["strip", "--strip-unneeded", str(path)], check=False)
         subprocess.run(["patchelf", "--set-rpath", "$ORIGIN", str(path)], check=True)
 
 
 def relocate_macos(directory: Path) -> None:
     for path in sorted(directory.glob("*.dylib")):
+        # -x keeps the exported symbols, which a shared library needs, and drops the local ones.
+        subprocess.run(["strip", "-x", str(path)], check=False)
+
         subprocess.run(["install_name_tool", "-id", "@loader_path/" + path.name, str(path)],
                        check=True)
 
