@@ -72,7 +72,7 @@ jobs:
             pytest-regressions pytest-xdist "reaktplot>=0.4.1" thermofun=0.4.5 spdlog=1.12 \
             tsl_ordered_map yaml-cpp=0.8.0 \
             vs2019_win-64
-          source activate reaktoro
+          conda activate reaktoro
           pip install oyaml
 
       - name: Building, Testing & Installing Reaktoro
