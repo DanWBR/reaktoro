@@ -89,7 +89,24 @@ auto openDatabase(const char* kind, const char* name) -> Database
     if(which == "nasa") return NasaDatabase(what);
     if(which == "thermofun") return ThermoFunDatabase(what);
 
-    return SupcrtDatabase(what);
+    const SupcrtDatabase db(what);
+
+    // H2O(g) in the embedded supcrt98/07/16 files has a bad Maier-Kelley fit (b < 0): its Cp falls
+    // from 40 J/mol/K at 298 K to near zero at 1200 K, and its Gf is 450 J/mol off CODATA, so steam
+    // reforming K and the vapour pressure of water both come out wrong. supcrtbl's H2O(g) agrees
+    // with JANAF, so its standard thermo model replaces the bad one. The database is rebuilt from
+    // lists because Database::addSpecies would keep the old species and add the new as "H2O(g)!".
+    if(what.rfind("supcrt98", 0) != 0 && what.rfind("supcrt07", 0) != 0 && what.rfind("supcrt16", 0) != 0)
+        return db;
+
+    static const StandardThermoModel steam = SupcrtDatabase("supcrtbl").species("H2O(g)").standardThermoModel();
+
+    Vec<Species> species = db.species().data();
+    for(auto& s : species)
+        if(s.name() == "H2O(g)" && s.aggregateState() == AggregateState::Gas)
+            s = s.withStandardThermoModel(steam);
+
+    return Database(db.elements().data(), species);
 }
 
 /// What DWSIM calls the aggregate state of a species. Reaktoro names seventeen of them; the four
